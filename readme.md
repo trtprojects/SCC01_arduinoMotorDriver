@@ -1,4 +1,4 @@
-# [Repo Name Here]
+# [SCC_arduinoMotorDriver]
 * Motor Driver Code for SCC
 
 ## Description
