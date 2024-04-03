@@ -82,6 +82,7 @@ void setup() {
   //requestedPulses = wellPosy;  // Moves to calibrated position for y
   //absoluteMove();
   //delay (1000);
+  Serial.println("SETUP COMPLETE");
 }
 
 void loop() {
@@ -109,22 +110,28 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
 
   if (part1.equalsIgnoreCase("pr"))  // Implements protocol
   {
+    Serial.println("PR:ACCEPTED");
     protocol();
   } else if (part1.equalsIgnoreCase("mo"))  //Request move to next well
   {
     Serial.println("Asking nextWell void");
+    Serial.println("MO:ACCEPTED");
     nextWell();
   } else if (part1.equalsIgnoreCase("ab"))  //Makes and absolute move for x axis
   {
-    absoluteMove();
+      Serial.println("AB:ACCEPTED"); // Might want to add checking for additional arguments here
+      absoluteMove();
   } else if (part1.equalsIgnoreCase("re"))  //Makes relative move for x axis
   {
+    Serial.println("RE:ACCEPTED"); // Might want to add checking for additional arguments here
     relativeMove();
   } else if (part1.equalsIgnoreCase("ho"))  //Homes the x axis
   {
+    Serial.println("HO:ACCEPTED");
     Home();
   } else if (part1.equalsIgnoreCase("po"))  //Sets current position to desired value
   {
+    Serial.println("PO:ACCEPTED"); // Might want to add checking for additional arguments here
     setPosition();
   } else if (part1.equalsIgnoreCase("he"))  //Displays available commands
   {
@@ -135,6 +142,7 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
     Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
     Serial.println(F("po(x, y, z)(integer)               Sets current position to user input"));
     Serial.println(F("help Provides list of commands available"));
+    Serial.println("HE:ACCEPTED");
   } else if (part1.equalsIgnoreCase("st"))  // Report Status
   {
     reportStatus();
@@ -142,8 +150,9 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
 }
 
 void reportStatus() {
-  String statusString = "st: " + status;
-  Serial.println(statusString);
+  String statusString = status;
+  Serial.println("ST:ACCEPTED:" + statusString);
+  // Serial.println(statusString);
 }
 
 void nextWell() {
