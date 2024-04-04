@@ -29,7 +29,7 @@ int oneWellstep = 360;  // steps per one well move.
 int ruptPinx = 0;       //0= motor M1/M2, 1= motor M3/M4
 int ruptPiny = 1;       //0= motor M1/M2, 1= motor M3/M4
 int requestedPulses;
-String axis;  //Character defining which axis requested
+String axis;              //Character defining which axis requested
 String status = "READY";  // String describing system status <READY|MOVING|ERROR>
 boolean sensorFailx;
 boolean sensorFaily;
@@ -100,6 +100,10 @@ void loop() {
   }
 }
 void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 or abx-456. Displays error of bad command
+                               //  CE 20240404:   Have added some command validation up here in parseCommand for communication
+                               //                 with the Labview module. I wanted it up here since the absolute and relative
+                               //                 move functions are called by other functions (which might get confusing if
+                               //                 error messages don't match the function that LabView called
 {
   String part1;  // 3 characters
   String part2;  //interger
@@ -112,6 +116,7 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
   {
     Serial.println("PR:ACCEPTED");
     protocol();
+    Serial.println("PR:COMPLETE");
   } else if (part1.equalsIgnoreCase("mo"))  //Request move to next well
   {
     Serial.println("Asking nextWell void");
@@ -119,22 +124,66 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
     nextWell();
   } else if (part1.equalsIgnoreCase("ab"))  //Makes and absolute move for x axis
   {
-      Serial.println("AB:ACCEPTED"); // Might want to add checking for additional arguments here
+    // Validate command here
+    if (com.length() < 4) {
+      Serial.println("Absolute move - not enough arguments");
+      Serial.println(F("ab(x, y, z)(integer)               Absolute move (positive only) ex. abx123"));
+      Serial.println("AB:REJECTED");
+    } else if (requestedPulses >= 20000 || requestedPulses <= -20000) {
+      Serial.println("Absolute move - requested move out of bounds");
+      Serial.println(F("ab(x, y, z)(integer)               Absolute move (positive only) ex. abx123"));
+      Serial.println("AB:REJECTED");
+    } else if (!((axis == "x") || (axis == "y") || (axis == "z"))) {
+      Serial.println(F("Absolute move - axis specified must be x y or z"));
+      Serial.println(F("ab(x, y, z)(integer)               Absolute move (positive only) ex. abx123"));
+      Serial.println("AB:REJECTED");
+
+    } else {
+      Serial.println("AB:ACCEPTED");  // Might want to add checking for additional arguments here
       absoluteMove();
-  } else if (part1.equalsIgnoreCase("re"))  //Makes relative move for x axis
+    }
+    Serial.println("AB:COMPLETE");
+  } else if (part1.equalsIgnoreCase("re"))  //Makes and absolute move for x axis
   {
-    Serial.println("RE:ACCEPTED"); // Might want to add checking for additional arguments here
-    relativeMove();
+    // Validate command here
+    if (com.length() < 4) {
+      Serial.println("Relative move - not enough arguments");
+      Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
+      Serial.println("RE:REJECTED");
+    } else if (axis == "x" && (requestedPulses + stepperX.currentPosition() >= 20000 || requestedPulses + stepperX.currentPosition() <= -20000)) {
+      Serial.println("Relative move - requested move out of bounds");
+      Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
+      Serial.println("RE:REJECTED");
+    } else if (axis == "y" && (requestedPulses + stepperY.currentPosition() >= 20000 || requestedPulses + stepperY.currentPosition() <= -20000)) {
+      Serial.println("Relative move - requested move out of bounds");
+      Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
+      Serial.println("RE:REJECTED");
+    // } else if (axis == "z" && (requestedPulses + stepperZ.currentPosition() >= 20000 || requestedPulses + stepperZ.currentPosition() <= -20000)) {
+    //   Serial.println("Relative move - requested move out of bounds");
+    //   Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
+    //   Serial.println("RE:REJECTED");
+    } else if (!((axis == "x") || (axis == "y") || (axis == "z"))) {
+      Serial.println(F("Relative move - axis specified must be x y or z"));
+      Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
+      Serial.println("RE:REJECTED");
+    } else {
+      Serial.println("RE:ACCEPTED");  // Might want to add checking for additional arguments here
+      relativeMove();
+    }
+    Serial.println("RE:COMPLETE");
   } else if (part1.equalsIgnoreCase("ho"))  //Homes the x axis
   {
     Serial.println("HO:ACCEPTED");
     Home();
+    Serial.println("HO:COMPLETE");
   } else if (part1.equalsIgnoreCase("po"))  //Sets current position to desired value
   {
-    Serial.println("PO:ACCEPTED"); // Might want to add checking for additional arguments here
+    Serial.println("PO:ACCEPTED");  // Might want to add checking for additional arguments here
     setPosition();
+    Serial.println("PO:COMPLETE");
   } else if (part1.equalsIgnoreCase("he"))  //Displays available commands
   {
+    Serial.println("HE:ACCEPTED");
     Serial.println(F("protocol                           Implements desired protocol"));
     Serial.println(F("mo                                 Request to move to next well"));
     Serial.println(F("ho(x, y or z)                      Homes motor of desired axis ex. hoz"));
@@ -142,17 +191,13 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
     Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
     Serial.println(F("po(x, y, z)(integer)               Sets current position to user input"));
     Serial.println(F("help Provides list of commands available"));
-    Serial.println("HE:ACCEPTED");
+    Serial.println("HE:COMPLETE");
   } else if (part1.equalsIgnoreCase("st"))  // Report Status
   {
-    reportStatus();
+    String statusString = status;
+    Serial.println("ST:ACCEPTED:" + statusString);
+    Serial.println("ST:COMPLETE");
   }
-}
-
-void reportStatus() {
-  String statusString = status;
-  Serial.println("ST:ACCEPTED:" + statusString);
-  // Serial.println(statusString);
 }
 
 void nextWell() {
