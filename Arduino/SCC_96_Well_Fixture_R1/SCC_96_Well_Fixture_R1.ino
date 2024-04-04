@@ -117,11 +117,38 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
     Serial.println("PR:ACCEPTED");
     protocol();
     Serial.println("PR:COMPLETE");
+  } else if (part1.equalsIgnoreCase("ps"))  // Request axis position
+  {
+    if (com.length() < 3) {
+      Serial.println("Get Axis Position - not enough arguments");
+      Serial.println(F("ab(x, y, z)(integer)               get axis position ex. psx"));
+      Serial.println("PS:REJECTED");
+    } else if (!((axis == "x") || (axis == "y") || (axis == "z"))) {
+      Serial.println(F("Get Axis Position - axis specified must be x y or z"));
+      Serial.println(F("ab(x, y, z)(integer)               get axis position ex. psx"));
+      Serial.println("PS:REJECTED");
+    } else if (axis=="x") {
+      String xPos = String(stepperX.currentPosition());
+      Serial.println("PS:ACCEPTED:" + xPos);
+    } else if (axis=="y") {
+      String yPos = String(stepperY.currentPosition());
+      Serial.println("PS:ACCEPTED:" + yPos);
+    } //else if (axis=="z") {
+    //   String zPos = String(stepperZ.currentPosition());
+    //   Serial.println("PS:ACCEPTED:" + zPos);
+    // }
+    Serial.println("PS:COMPLETE");
   } else if (part1.equalsIgnoreCase("mo"))  //Request move to next well
   {
     Serial.println("Asking nextWell void");
     Serial.println("MO:ACCEPTED");
     nextWell();
+    Serial.println("MO:COMPLETE");
+  } else if (part1.equalsIgnoreCase("cw"))  // Return current well index
+  {
+    String wellString = String(wellCount);
+    Serial.println("CW:ACCEPTED:" + wellString);
+    Serial.println("CW:COMPLETE");
   } else if (part1.equalsIgnoreCase("ab"))  //Makes and absolute move for x axis
   {
     // Validate command here
