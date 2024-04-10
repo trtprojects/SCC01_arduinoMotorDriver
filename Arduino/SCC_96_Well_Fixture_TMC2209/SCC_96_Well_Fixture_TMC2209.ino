@@ -1,88 +1,65 @@
 
-// Requires the Adafruit_Motorshield v2 library
-//   https://github.com/adafruit/Adafruit_Motor_Shield_V2_Library
 // And AccelStepper with AFMotor support
 //   https://github.com/adafruit/AccelStepper
 // Comes from "Accel_MultiStepper_CT.ino"
 
 #include <Wire.h>
 #include <AccelStepper.h>
-#include <Adafruit_MotorShield.h>
-#include <Adafruit_PWMServoDriver.h>
-#include "utility/Adafruit_MS_PWMServoDriver.h"  // Adafruit Servo Driver Library
-
-Adafruit_MotorShield AFMSBot(0x60);                              // No jumpers
-Adafruit_StepperMotor *myStepperX = AFMSBot.getStepper(200, 1);  //First value is steps/rev of motor, Second value-> 1= motor M1/M2, 2= motor M3/M4
-Adafruit_StepperMotor *myStepperY = AFMSBot.getStepper(200, 2);  //First value is steps/rev of motor, Second value-> 1= motor M1/M2, 2= motor M3/M4
 
 // Stage from Amazon - https://www.amazon.com/Befenybay-Ballscrew-SFU1605-Stepper-Actuator/dp/B085STFFM7/ref=pd_ci_mcx_di_int_sccai_cn_d_sccl_3_6/132-9613518-1192923?pd_rd_w=UVFxE&content-id=amzn1.sym.751acc83-5c05-42d0-a15e-303622651e1e&pf_rd_p=751acc83-5c05-42d0-a15e-303622651e1e&pf_rd_r=CFM3NDRJ0KF907C9V476&pd_rd_wg=4KSXZ&pd_rd_r=68ea85c7-c0c8-4095-84dd-2c8a2b66d7ae&pd_rd_i=B07W89HSY8&th=1
 // 5mm/rev (leadscrew pitch)
-// Well spacing = 9mm which equals 360 steps
+// 1600steps/rev (TMC2209 defualts to 8ustep)
+// Well spacing = 9mm which equals 2880 steps
+// NEMA 17 motors, 12V, 1.5A, 200steps/rev
 
 String command;
-int xPosition = 0;      //Variable to define X postion.
-int yPosition = 0;      //Variable to define Y postion.
-int wellPosx = 2000;    //Input the steps in X to center on first well.
-int wellPosy = 2000;    //Input the steps in Y to center on first well.
-int wellCount = 1;      //Counts number of wells to ensure we don't exceed 96 and determines when to raster to next column.
-int oneWellstep = 360;  // steps per one well move.
-int ruptPinx = 0;       //0= motor M1/M2, 1= motor M3/M4
-int ruptPiny = 1;       //0= motor M1/M2, 1= motor M3/M4
+const int pinEnAx = 10;
+const int pinEnAy = 7;
+int numMicrosteps = 8;
+int numSteps = 1000;
+const int numRev = 1;
+const int stepsPerRevolution = 200;
+int yDirection = 1;
+int xPosition = 0;       //Variable to define X postion.
+int yPosition = 0;       //Variable to define Y postion.
+int wellPosx = 5200;     //Input the steps in X to center on first well.
+int wellPosy = 2950;     //Input the steps in Y to center on first well.
+int wellCount = 1;       //Counts number of wells to ensure we don't exceed 96 and determines when to raster to next column.
+int oneWellstep = 2880;  // steps per one well move.
+int ruptPinx = 0;        //  Analog pin for monitoring X opto
+int ruptPiny = 1;        //  Analog pin for monitoring Y opto
 int requestedPulses;
 String axis;              //Character defining which axis requested
 String status = "READY";  // String describing system status <READY|MOVING|ERROR>
 boolean sensorFailx;
 boolean sensorFaily;
 
-// you can change these to DOUBLE or INTERLEAVE or MICROSTEP!
-// wrappers for the motor!
-void forwardstepX() {
-  myStepperX->onestep(FORWARD, DOUBLE);
-}
-void backwardstepX() {
-  myStepperX->onestep(BACKWARD, DOUBLE);
-}
-void forwardstepY() {
-  myStepperX->onestep(FORWARD, DOUBLE);
-}
-void backwardstepY() {
-  myStepperX->onestep(BACKWARD, DOUBLE);
-}
-
-
 // Now we'll wrap the steppers in an AccelStepper object
-AccelStepper stepperX(forwardstepX, backwardstepX);  //flip variables to change default motor direction
-AccelStepper stepperY(forwardstepY, backwardstepY);  //flip variables to change default motor direction
+AccelStepper stepperX(1, 9, 8);  // (Typeof driver: with 2 pins, STEP, DIR)
+AccelStepper stepperY(1, 6, 5);  // (Typeof driver: with 2 pins, STEP, DIR)
 void setup() {
-  AFMSBot.begin();  //Starts motor shield
-  // TWBR = ((F_CPU /400000l) - 16) / 2; // Change the i2c clock to 400KHz
+  pinMode(pinEnAx, OUTPUT);
+  digitalWrite(pinEnAx, LOW);  //enables motor driver
+  pinMode(pinEnAy, OUTPUT);
+  digitalWrite(pinEnAy, LOW);  //enables motor driver
+
   Serial.begin(9600);  // opens serial port, sets data rate to 9600 bps
   Serial.println(F("Arduino awake"));
+  Serial.println(F("File: SCC_96_Well_Fixture_TMC2209_R1"));
   Serial.println(F("Serial parse sketch to input motor control parameters"));
   Serial.println(F("Ex. abx12345 or abx-12345"));
-  Serial.println(F("Type (help) for list of commands"));
+  Serial.println(F("Type (help) for list of commands:"));
+  Serial.println(F(" "));
 
-  stepperX.setAcceleration(1000);
-  stepperX.setMaxSpeed(1000);  //For Haydon-Kerk motor E25541-05 max speed approx 400. leadscrew .001"/step
+  stepperX.setAcceleration(3000);
+  stepperX.setMaxSpeed(2000);
 
-  stepperY.setAcceleration(1000);
-  stepperY.setMaxSpeed(1000);  //For Haydon-Kerk motor E25541-05 max speed approx 400. leadscrew .001"/step
+  stepperY.setAcceleration(3000);
+  stepperY.setMaxSpeed(2000);
 
-  // Initially home both motors and move to well 1
-  axis = "x";
-  Home();
+  stepperX.setCurrentPosition(0);  // Set the current position to 0 steps
+  stepperY.setCurrentPosition(0);  // Set the current position to 0 steps
   delay(1000);
-  requestedPulses = wellPosx;  // Moves to calibrated position for X
-  absoluteMove();
-  delay(1000);
-  //axis="y";
-  //Serial.println(axis);
-  //Home();
-  //delay (1000);
-  //requestedPulses = wellPosy;  // Moves to calibrated position for y
-  //absoluteMove();
-  //delay (1000);
-  Serial.println("SETUP COMPLETE");
 }
 
 void loop() {
@@ -100,10 +77,6 @@ void loop() {
   }
 }
 void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 or abx-456. Displays error of bad command
-                               //  CE 20240404:   Have added some command validation up here in parseCommand for communication
-                               //                 with the Labview module. I wanted it up here since the absolute and relative
-                               //                 move functions are called by other functions (which might get confusing if
-                               //                 error messages don't match the function that LabView called
 {
   String part1;  // 3 characters
   String part2;  //interger
@@ -112,11 +85,13 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
   part2 = com.substring(3, '\n');
   requestedPulses = (part2.toInt());  //Loads integer into "requestedPulses"
 
-  if (part1.equalsIgnoreCase("pr"))  // Implements protocol
+  /////  Go to first well
+  if (part1.equalsIgnoreCase("fw"))  // Implements protocol
   {
-    Serial.println("PR:ACCEPTED");
-    protocol();
-    Serial.println("PR:COMPLETE");
+    Serial.println("FW:ACCEPTED");
+    firstWell();
+    Serial.println("FW:COMPLETE");
+  /////  Request axis position
   } else if (part1.equalsIgnoreCase("ps"))  // Request axis position
   {
     if (com.length() < 3) {
@@ -127,29 +102,35 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
       Serial.println(F("Get Axis Position - axis specified must be x y or z"));
       Serial.println(F("ab(x, y, z)(integer)               get axis position ex. psx"));
       Serial.println("PS:REJECTED");
-    } else if (axis=="x") {
+    } else if (axis == "x") {
       String xPos = String(stepperX.currentPosition());
       Serial.println("PS:ACCEPTED:" + xPos);
-    } else if (axis=="y") {
+    } else if (axis == "y") {
       String yPos = String(stepperY.currentPosition());
       Serial.println("PS:ACCEPTED:" + yPos);
-    } //else if (axis=="z") {
-    //   String zPos = String(stepperZ.currentPosition());
-    //   Serial.println("PS:ACCEPTED:" + zPos);
-    // }
+    }  //else if (axis=="z") {
     Serial.println("PS:COMPLETE");
-  } else if (part1.equalsIgnoreCase("mo"))  //Request move to next well
+
+  /////  Request move to next well
+
+  } else if (part1.equalsIgnoreCase("mo"))
   {
     Serial.println("Asking nextWell void");
     Serial.println("MO:ACCEPTED");
     nextWell();
     Serial.println("MO:COMPLETE");
-  } else if (part1.equalsIgnoreCase("cw"))  // Return current well index
+
+  /////  Return current well index
+
+  } else if (part1.equalsIgnoreCase("cw"))
   {
     String wellString = String(wellCount);
     Serial.println("CW:ACCEPTED:" + wellString);
     Serial.println("CW:COMPLETE");
-  } else if (part1.equalsIgnoreCase("ab"))  //Makes and absolute move for x axis
+
+  /////  Makes and absolute move for x axis
+
+  } else if (part1.equalsIgnoreCase("ab")) 
   {
     // Validate command here
     if (com.length() < 4) {
@@ -164,13 +145,15 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
       Serial.println(F("Absolute move - axis specified must be x y or z"));
       Serial.println(F("ab(x, y, z)(integer)               Absolute move (positive only) ex. abx123"));
       Serial.println("AB:REJECTED");
-
     } else {
       Serial.println("AB:ACCEPTED");  // Might want to add checking for additional arguments here
       absoluteMove();
     }
     Serial.println("AB:COMPLETE");
-  } else if (part1.equalsIgnoreCase("re"))  //Makes and absolute move for x axis
+
+  /////  Makes and relative move for x axis
+
+  } else if (part1.equalsIgnoreCase("re"))  
   {
     // Validate command here
     if (com.length() < 4) {
@@ -185,111 +168,135 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
       Serial.println("Relative move - requested move out of bounds");
       Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
       Serial.println("RE:REJECTED");
-    // } else if (axis == "z" && (requestedPulses + stepperZ.currentPosition() >= 20000 || requestedPulses + stepperZ.currentPosition() <= -20000)) {
-    //   Serial.println("Relative move - requested move out of bounds");
-    //   Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
-    //   Serial.println("RE:REJECTED");
-    } else if (!((axis == "x") || (axis == "y") || (axis == "z"))) {
-      Serial.println(F("Relative move - axis specified must be x y or z"));
-      Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
-      Serial.println("RE:REJECTED");
     } else {
       Serial.println("RE:ACCEPTED");  // Might want to add checking for additional arguments here
       relativeMove();
     }
     Serial.println("RE:COMPLETE");
-  } else if (part1.equalsIgnoreCase("ho"))  //Homes the x axis
+
+  /////  Homes the x axis
+
+  } else if (part1.equalsIgnoreCase("ho")) 
   {
     Serial.println("HO:ACCEPTED");
     Home();
     Serial.println("HO:COMPLETE");
-  } else if (part1.equalsIgnoreCase("po"))  //Sets current position to desired value
+
+  /////  Sets current position to desired value
+
+  } else if (part1.equalsIgnoreCase("po"))  
   {
     Serial.println("PO:ACCEPTED");  // Might want to add checking for additional arguments here
     setPosition();
     Serial.println("PO:COMPLETE");
-  } else if (part1.equalsIgnoreCase("he"))  //Displays available commands
+
+  /////  Motor test?
+
+  } else if (part1.equalsIgnoreCase("tm"))
+  {
+    Serial.println("TM:ACCEPTED");  // Validation?
+    testMotor();
+    Serial.println("TM:COMPLETE");
+
+  /////  Displays available commands
+
+  } else if (part1.equalsIgnoreCase("he"))
   {
     Serial.println("HE:ACCEPTED");
-    Serial.println(F("protocol                           Implements desired protocol"));
+    Serial.println(F("fw                                 Moves to first well"));
     Serial.println(F("mo                                 Request to move to next well"));
     Serial.println(F("ho(x, y or z)                      Homes motor of desired axis ex. hoz"));
     Serial.println(F("ab(x, y, z)(integer)               Absolute move (positive only) ex. abx123"));
     Serial.println(F("re(x, y, z)(integer)               Relative move (pos or neg)from current position ex. rez-123"));
-    Serial.println(F("po(x, y, z)(integer)               Sets current position to user input"));
+    Serial.println(F("po(x, y, z)(integer)               Sets current position by user input"));
+    Serial.println(F("tm(x, y, z)(integer)               Cycle motors back and forth"));
     Serial.println(F("help Provides list of commands available"));
     Serial.println("HE:COMPLETE");
-  } else if (part1.equalsIgnoreCase("st"))  // Report Status
+
+  /////  Report Status
+
+  } else if (part1.equalsIgnoreCase("st"))
   {
     String statusString = status;
     Serial.println("ST:ACCEPTED:" + statusString);
     Serial.println("ST:COMPLETE");
+  } else {
+    Serial.println(F("Command not recongnized"));
+    Serial.println(part1);
   }
 }
 
 void nextWell() {
-  Serial.println("In nextWell void");
-  if (wellCount = 9 || 17 || 25 || 33 || 41 || 49 || 57 || 65 || 73 || 81 || 97)  // Checks for if move to next column required.
+  Serial.print(F("Current well # "));
+  Serial.println(wellCount);
+  if (wellCount % 8 == 0)  // Checks for if move to next column required.
   {
     axis = "x";
-    requestedPulses = -360;
+    stepperX.setSpeed(2000);
+    stepperX.setAcceleration(1000);
+    requestedPulses = oneWellstep;
     relativeMove();
-    axis = "x";
-    requestedPulses = oneWellstep * 7;
-    relativeMove();
+    yDirection = yDirection * -1;
+    wellCount++;
+    Serial.print(F("Well count "));
+    Serial.println(wellCount);
   } else {
-    axis = "x";
-    requestedPulses = -360;
+    axis = "y";
+    stepperY.setSpeed(2000);
+    stepperY.setAcceleration(1000);
+    requestedPulses = oneWellstep * yDirection;
     relativeMove();
+    wellCount++;
+    Serial.print(F("Well count "));
+    Serial.println(wellCount);
   }
 }
 
-void protocol() {
-  int numberScan = 10;  //Total number of back/forth scans for test
-  int totalNumberScan = numberScan;
-  axis = "x";
-  Home();
-  requestedPulses = 50;  // Starting position of scan
-  while (numberScan != 0 && sensorFailx == false) {
-    requestedPulses = 1010;  // 960 pulses = 24mm (add starting position)
-    absoluteMove();
-    requestedPulses = 50;  // Starting position of scan
-    absoluteMove();
-    numberScan--;  // Decrease by 1 for next move if needed
-    Serial.print(totalNumberScan - numberScan);
-    Serial.print(" of ");
-    Serial.println(totalNumberScan);
-  }
-  Serial.println(F("Protocol complete"));
+void firstWell() {
+  stepperX.setSpeed(2000);
+  stepperX.setAcceleration(1000);
+  Serial.println(F("Moving to first well"));
+  requestedPulses = wellPosx;
+  stepperX.moveTo(requestedPulses);
+  stepperX.runToPosition();
+
+  stepperY.setSpeed(2000);
+  stepperY.setAcceleration(1000);
+  requestedPulses = wellPosy;
+  stepperY.moveTo(requestedPulses);
+  stepperY.runToPosition();
+  wellCount = 1;
+  Serial.println(F("At first well"));
+  Serial.println(F("Well count "));
+  Serial.println(wellCount);
 }
+
 void absoluteMove() {
   if (axis == "x") {
-    stepperX.setSpeed(800);
+    stepperX.setSpeed(2000);
     stepperX.setAcceleration(1000);
     Serial.print(F("Absolute X motor move = "));
     Serial.println(requestedPulses);
     xPosition = requestedPulses;
-    if (xPosition < 20000 && xPosition > -20000)  // Checks for commands greater than travel range
+    if (xPosition < 200000 && xPosition > -200000)  // Checks for commands greater than travel range
     {
       stepperX.moveTo(requestedPulses);
       stepperX.runToPosition();
-      myStepperX->release();
       Serial.print(xPosition);
       Serial.println(F(", "));
     } else {
       Serial.println(F("Position request exceeds travel. Command aborted"));
     }
   } else if (axis == "y") {
-    stepperY.setSpeed(800);
+    stepperY.setSpeed(2000);
     stepperY.setAcceleration(1000);
     Serial.print(F("Absolute Y motor move = "));
     Serial.println(requestedPulses);
     yPosition = requestedPulses;
-    if (yPosition < 20000 && yPosition > -20000)  // Checks for commands greater than travel range
+    if (yPosition < 200000 && yPosition > -200000)  // Checks for commands greater than travel range
     {
       stepperY.moveTo(requestedPulses);
       stepperY.runToPosition();
-      myStepperY->release();
       Serial.print(yPosition);
       Serial.println(F(", "));
     } else {
@@ -299,32 +306,32 @@ void absoluteMove() {
 }
 void relativeMove() {
   if (axis == "x") {
-    stepperX.setSpeed(800);
+    stepperX.setSpeed(50);
     stepperX.setAcceleration(1000);
     Serial.print(F("Relative X motor move = "));
     Serial.println(requestedPulses);
-    xPosition = stepperX.currentPosition() + requestedPulses;
-    if (xPosition < 20000 && xPosition > -20000)  // Checks for commands greater than travel range
+    xPosition = stepperX.currentPosition() + (requestedPulses);
+    if (xPosition < 200000 && xPosition > -200000)  // Checks for commands greater than travel range
     {
+      stepperX.setAcceleration(5000);
+      stepperX.setSpeed(2000);
       stepperX.moveTo(xPosition);
-      stepperX.runToPosition();
-      myStepperX->release();
+      stepperX.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
       Serial.print(xPosition);
       Serial.println(F(", "));
     } else {
       Serial.println(F("Position request exceeds travel. Command aborted"));
     }
   } else if (axis == "y") {
-    stepperY.setSpeed(800);
+    stepperY.setSpeed(2000);
     stepperY.setAcceleration(1000);
     Serial.print(F("Relative Y motor move = "));
     Serial.println(requestedPulses);
-    yPosition = stepperY.currentPosition() + requestedPulses;
-    if (yPosition < 20000 && yPosition > -20000)  // Checks for commands greater than travel range
+    yPosition = stepperY.currentPosition() + (requestedPulses);
+    if (yPosition < 200000 && yPosition > -200000)  // Checks for commands greater than travel range
     {
       stepperY.moveTo(yPosition);
-      stepperY.runToPosition();
-      myStepperY->release();
+      stepperY.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
       Serial.print(yPosition);
       Serial.println(F(", "));
     } else {
@@ -370,7 +377,6 @@ void Home() {
     Serial.println(F(", "));
     stepperX.setCurrentPosition(0);
     xPosition = stepperX.currentPosition();
-    myStepperX->release();
     stepperX.setSpeed(800);
     stepperX.setAcceleration(200);
     //  sensorFailx = false;
@@ -410,7 +416,6 @@ void Home() {
     Serial.println(F(", "));
     stepperY.setCurrentPosition(0);
     yPosition = stepperY.currentPosition();
-    myStepperY->release();
     stepperY.setSpeed(800);
     stepperY.setAcceleration(200);
     sensorFaily = false;
@@ -418,22 +423,28 @@ void Home() {
 }
 void setPosition() {
   if (axis == "x") {
+    stepperX.setCurrentPosition(requestedPulses);
     Serial.print(F("Current X = "));
     Serial.println(requestedPulses);
-    xPosition = requestedPulses;  //Sets X position to user input
   } else if (axis == "y") {
-    Serial.print(F("Relative Y motor move = "));
+    stepperY.setCurrentPosition(requestedPulses);
+    Serial.print(F("Current Y = "));
     Serial.println(requestedPulses);
-    yPosition = stepperY.currentPosition() + requestedPulses;
-    if (yPosition < 2001 && yPosition > -20000)  // Checks for commands greater than travel range
-    {
-      stepperY.moveTo(yPosition);
-      stepperY.runToPosition();
-      myStepperY->release();
-      Serial.print(yPosition);
-      Serial.println(F(", "));
-    } else {
-      Serial.println(F("Position request exceeds travel. Command aborted"));
-    }
   }
+}
+
+void testMotor() {
+  stepperX.move(numSteps);   // Set desired move: 800 steps (in 1/8 resolution that's one rotation)
+  stepperX.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
+  delay(1000);
+  stepperX.move(-1 * numSteps);  // Set desired move: 800 steps (in 1/8 resolution that's one rotation)
+  stepperX.runToPosition();      // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
+  delay(1000);
+
+  stepperY.move(numSteps);   // Set desired move: 800 steps (in 1/8 resolution that's one rotation)
+  stepperY.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
+  delay(1000);
+  stepperY.move(-1 * numSteps);  // Set desired move: 800 steps (in 1/8 resolution that's one rotation)
+  stepperY.runToPosition();      // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
+  delay(1000);
 }
