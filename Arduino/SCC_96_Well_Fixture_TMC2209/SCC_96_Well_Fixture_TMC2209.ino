@@ -20,15 +20,15 @@ int numSteps = 1000;
 const int numRev = 1;
 const int stepsPerRevolution = 200;
 int yDirection = 1;
-int xPosition = 0;       //Variable to define X postion.
-int yPosition = 0;       //Variable to define Y postion.
+long xPosition = 0;       //Variable to define X postion.
+long yPosition = 0;       //Variable to define Y postion.
 int wellPosx = 5200;     //Input the steps in X to center on first well.
 int wellPosy = 2950;     //Input the steps in Y to center on first well.
 int wellCount = 1;       //Counts number of wells to ensure we don't exceed 96 and determines when to raster to next column.
 int oneWellstep = 2880;  // steps per one well move.
 int ruptPinx = 0;        //  Analog pin for monitoring X opto
 int ruptPiny = 1;        //  Analog pin for monitoring Y opto
-int requestedPulses;
+long requestedPulses;
 String axis;              //Character defining which axis requested
 String status = "READY";  // String describing system status <READY|MOVING|ERROR>
 boolean sensorFailx;
@@ -45,17 +45,17 @@ void setup() {
 
   Serial.begin(9600);  // opens serial port, sets data rate to 9600 bps
   Serial.println(F("Arduino awake"));
-  Serial.println(F("File: SCC_96_Well_Fixture_TMC2209_R1"));
+  Serial.println(F("File: SCC_96_Well_Fixture_TMC2209_CE_R2"));
   Serial.println(F("Serial parse sketch to input motor control parameters"));
   Serial.println(F("Ex. abx12345 or abx-12345"));
   Serial.println(F("Type (help) for list of commands:"));
   Serial.println(F(" "));
 
   stepperX.setAcceleration(3000);
-  stepperX.setMaxSpeed(2000);
+  stepperX.setMaxSpeed(3000);
 
   stepperY.setAcceleration(3000);
-  stepperY.setMaxSpeed(2000);
+  stepperY.setMaxSpeed(3000);
 
   stepperX.setCurrentPosition(0);  // Set the current position to 0 steps
   stepperY.setCurrentPosition(0);  // Set the current position to 0 steps
@@ -229,39 +229,50 @@ void parseCommand(String com)  //Takes in command and parses info.  ex. abx125 o
 void nextWell() {
   Serial.print(F("Current well # "));
   Serial.println(wellCount);
-  if (wellCount % 8 == 0)  // Checks for if move to next column required.
+  if (wellCount <= 96)   // Checks to see if exceed 96 wells.
   {
+    if (wellCount % 8 == 0)  // Checks for if move to next column required.
+    {
+      axis = "x";
+      stepperX.setMaxSpeed(3000);
+      stepperX.setAcceleration(3000);
+      requestedPulses = oneWellstep;
+      relativeMove();
+      yDirection = yDirection * -1;
+      wellCount++;
+      Serial.print(F("Well count "));
+      Serial.println(wellCount);
+    } 
+    else {
+      axis = "y";
+      stepperY.setSpeed(3000);
+      stepperY.setAcceleration(3000);
+      requestedPulses = oneWellstep * yDirection;
+      relativeMove();
+      wellCount++;
+      Serial.print(F("Well count "));
+      Serial.println(wellCount);
+    }
+  }
+  else{
+    Serial.print(F("Exceeded max number of wells"));
     axis = "x";
-    stepperX.setSpeed(2000);
-    stepperX.setAcceleration(1000);
-    requestedPulses = oneWellstep;
-    relativeMove();
-    yDirection = yDirection * -1;
-    wellCount++;
-    Serial.print(F("Well count "));
-    Serial.println(wellCount);
-  } else {
+    Home();
     axis = "y";
-    stepperY.setSpeed(2000);
-    stepperY.setAcceleration(1000);
-    requestedPulses = oneWellstep * yDirection;
-    relativeMove();
-    wellCount++;
-    Serial.print(F("Well count "));
-    Serial.println(wellCount);
+    Home();
   }
 }
 
 void firstWell() {
-  stepperX.setSpeed(2000);
-  stepperX.setAcceleration(1000);
+  stepperX.setMaxSpeed(3000);
+  stepperX.setAcceleration(3000);
   Serial.println(F("Moving to first well"));
   requestedPulses = wellPosx;
   stepperX.moveTo(requestedPulses);
   stepperX.runToPosition();
 
-  stepperY.setSpeed(2000);
-  stepperY.setAcceleration(1000);
+  stepperY.setMaxSpeed(3000);
+  stepperY.setAcceleration(3000);
   requestedPulses = wellPosy;
   stepperY.moveTo(requestedPulses);
   stepperY.runToPosition();
@@ -273,8 +284,8 @@ void firstWell() {
 
 void absoluteMove() {
   if (axis == "x") {
-    stepperX.setSpeed(2000);
-    stepperX.setAcceleration(1000);
+    stepperX.setMaxSpeed(3000);
+    stepperX.setAcceleration(3000);
     Serial.print(F("Absolute X motor move = "));
     Serial.println(requestedPulses);
     xPosition = requestedPulses;
@@ -288,8 +299,8 @@ void absoluteMove() {
       Serial.println(F("Position request exceeds travel. Command aborted"));
     }
   } else if (axis == "y") {
-    stepperY.setSpeed(2000);
-    stepperY.setAcceleration(1000);
+    stepperY.setMaxSpeed(3000);
+    stepperY.setAcceleration(3000);
     Serial.print(F("Absolute Y motor move = "));
     Serial.println(requestedPulses);
     yPosition = requestedPulses;
@@ -306,15 +317,15 @@ void absoluteMove() {
 }
 void relativeMove() {
   if (axis == "x") {
-    stepperX.setSpeed(50);
-    stepperX.setAcceleration(1000);
+//    stepperX.setSpeed(500);
+//    stepperX.setAcceleration(1000);
     Serial.print(F("Relative X motor move = "));
     Serial.println(requestedPulses);
-    xPosition = stepperX.currentPosition() + (requestedPulses);
-    if (xPosition < 200000 && xPosition > -200000)  // Checks for commands greater than travel range
+    xPosition = stepperX.currentPosition() + requestedPulses;
+    if (xPosition < 2000000 && xPosition > -2000000)  // Checks for commands greater than travel range
     {
-      stepperX.setAcceleration(5000);
-      stepperX.setSpeed(2000);
+      stepperX.setAcceleration(3000);
+      stepperX.setMaxSpeed(3000);
       stepperX.moveTo(xPosition);
       stepperX.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
       Serial.print(xPosition);
@@ -323,12 +334,12 @@ void relativeMove() {
       Serial.println(F("Position request exceeds travel. Command aborted"));
     }
   } else if (axis == "y") {
-    stepperY.setSpeed(2000);
-    stepperY.setAcceleration(1000);
+    stepperY.setMaxSpeed(3000);
+    stepperY.setAcceleration(3000);
     Serial.print(F("Relative Y motor move = "));
     Serial.println(requestedPulses);
-    yPosition = stepperY.currentPosition() + (requestedPulses);
-    if (yPosition < 200000 && yPosition > -200000)  // Checks for commands greater than travel range
+    yPosition = stepperY.currentPosition() + requestedPulses;
+    if (yPosition < 2000000 && yPosition > -2000000)  // Checks for commands greater than travel range
     {
       stepperY.moveTo(yPosition);
       stepperY.runToPosition();  // Moves the motor to target position w/ acceleration/ deceleration and it blocks until is in position
