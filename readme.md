@@ -23,8 +23,8 @@
 Arduino script may be used with arduino IDE as follows:
 * sample input: XXY12345 generic
     * First two letters identify the function called
-    * Third letter is parsed to determine the axis dependent commands for the X, Y & Z axis Otherwise the letter is meaningless.
-    * The last segment is turned into a number for length of move, etc.  For defining the well other than 1,1, need three letters first (ex.  nwp [New Well position]) and as you suggest, 0512 cam be parsed to x=5 and Y=12.
+    * Third letter (optional) is parsed to determine the axis dependent commands for the X, Y & Z axis Otherwise the letter is meaningless.
+    * The last segment (optional) is turned into a number for length of move, etc.  For defining the well other than 1,1, need three letters first (ex.  nwp [New Well position]) and as you suggest, 0512 cam be parsed to x=5 and Y=12.
 
 More specific command info:
 Low level commands, probably for debug:
