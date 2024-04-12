@@ -42,6 +42,14 @@ Application type commands:
 * cw – get current position in well coordinates < NN >
 * st – return status.. maybe responses are <MOVING | READY | ERROR>
 
+## Expected Usage
+
+Will need to:
+•	Home each axis (ho[x,y]).
+•	Move to first well (fw).
+•	Move to next well (mo).
+•	Make sure you count wells to not exceed 96.
+
 ## Help
 * Any advise for common problems or issues.
 ```
