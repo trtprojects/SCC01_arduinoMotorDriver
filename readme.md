@@ -4,13 +4,15 @@
 ## Description
 * For the flow through system, in SCC, a set of motors are needed to raster through a 96-well plate.  Associated code is contained herein.
 
-* SCC_96_Well_Fixture_R1.ino: arduino motor control code
-* arduinoSerialComm.vi: labview VI to send serial communication to arduino and trigger events
+* SCC_96_Well_Fixture_TNC2209.ino: arduino motor control code
+* arduinoOpenComPort.vi: opens serial port communication to Arduino
+* arduinoCloseComPort.vi: closes serial port communcation to Arduino
+* arduinoSendCommand.vi: Sends command to open serial port - takes raw text command as argument; includes parameters to control timeout and command validation
 
 ## Getting Started
 
 ### Dependencies
-* Code herein uses Arduino IDE and/or LabVIEW.
+* Code herein is Arduino or LabVIEW.
 * TODO: Add in requirements for Arduino and Labview.
 
 ### Installing
@@ -26,16 +28,18 @@ Arduino script may be used with arduino IDE as follows:
 
 More specific command info:
 Low level commands, probably for debug:
-* abX1234 (command individual motors as you describe)
+* abAnnnn (command individual motor on axis 'A' to position 'nnnn') ('A' needs to be lower case, like 'x' or 'y')
+* reAnnnn (command individual motor on axis 'A' to move by 'nnnn' steps, relative to current position) ('A' needs to be lower case, like 'x' or 'y')
 * psX (request position of axis X, would need to add two-way) (maybe you could run something like this after each homing to make sure everything’s behaving well)
-* hm  (have you been ‘homed’ since power on?) <TRUE | FALSE>
+* tm  (test motor)
+* he  (produce help output)
  
 Application type commands:
-* mv – move to next well
-* gf – go to first well
-* nw_XXYY – as you describe, but I suggest to require both X and Y to be two digits?  So nw0508.. maybe not necessary, but easier?
-* hm – home all motors
-* cw – get current position in well coordinates < XXYY >
+* poAnnnn – (set position of motor on axis 'A' to position 'nnnn') (I think this tells the motor what position it's at - not tell it to move)
+* mo – move to next well
+* fw – go to first well
+* ho – home all motors
+* cw – get current position in well coordinates < NN >
 * st – return status.. maybe responses are <MOVING | READY | ERROR>
 
 ## Help
@@ -45,7 +49,7 @@ command to run if program contains helper info
 ```
 
 ## Authors
-Names and contributions (i.e. developer, reviewer, etc)
+Various Chrises
 
 ## Release History 
 * Projects with releases should utilize git tags to annotate the release in git history.  Additional details about the releases should be provided here. [May not be used for all projects.]
