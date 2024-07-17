@@ -264,7 +264,7 @@ void nextWell() {
 }
 
 void firstWell() {
-  yDirection = 1
+  yDirection = 1;
   stepperX.setMaxSpeed(3000);
   stepperX.setAcceleration(3000);
   Serial.println(F("Moving to first well"));
